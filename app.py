@@ -1,7 +1,8 @@
 import streamlit as st
 import numpy as np
 from PIL import Image
-import tensorflow as tf
+from ai_edge_litert import Interpreter
+
 
 st.set_page_config(page_title="🍅 Tomato Disease Detector", layout="centered")
 st.title("🍅 Tomato Leaf Disease Detector (TFLite)")
@@ -10,7 +11,7 @@ st.write("Upload a tomato leaf image to identify the disease type and view treat
 # 🧠 Load the TFLite model and labels
 @st.cache_resource
 def load_model():
-    interpreter = tf.lite.Interpreter(model_path="tomato_mobilenetv2_best.tflite")
+  interpreter = Interpreter(model_path="tomato_mobilenetv2_best.tflite")
     interpreter.allocate_tensors()
     return interpreter
 
