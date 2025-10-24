@@ -1,0 +1,4 @@
+Tomato_Bacterial_spot
+Tomato__Target_Spot
+Tomato__Tomato_YellowLeaf__Curl_Virus
+Tomato__Tomato_mosaic_virus
