@@ -1,89 +1,82 @@
-
 import streamlit as st
-import tensorflow as tf
 import numpy as np
 from PIL import Image
+import tensorflow as tf
 
-# Load the trained model
-model = tf.keras.models.load_model("tomato_mobilenetv2_best.keras")
+st.set_page_config(page_title="🍅 Tomato Disease Detector", layout="centered")
+st.title("🍅 Tomato Leaf Disease Detector (TFLite)")
+st.write("Upload a tomato leaf image to identify the disease type and view treatment suggestions.")
 
-# Define the class labels
-CLASS_NAMES = [
-    "Tomato_Bacterial_spot",
-    "Tomato__Target_Spot",
-    "Tomato__Tomato_YellowLeaf__Curl_Virus",
-    "Tomato__Tomato_mosaic_virus"
-]
+# 🧠 Load the TFLite model and labels
+@st.cache_resource
+def load_model():
+    interpreter = tf.lite.Interpreter(model_path="tomato_mobilenetv2_best.tflite")
+    interpreter.allocate_tensors()
+    return interpreter
 
-# Disease info
+@st.cache_data
+def load_labels():
+    with open("labels.txt", "r") as f:
+        return [line.strip() for line in f.readlines()]
+
+interpreter = load_model()
+labels = load_labels()
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
+
+# 🍅 Disease info
 disease_info = {
     "Tomato_Bacterial_spot": {
-        "description": "Caused by *Xanthomonas campestris*, leads to small dark spots on leaves and fruits.",
-        "symptoms": "Brown-black leaf spots with yellow halos; fruits get scabby patches.",
-        "treatment": [
-            "Remove infected leaves and fruits.",
-            "Spray copper-based bactericides.",
-            "Avoid overhead watering; maintain proper spacing."
-        ]
+        "Description": "Caused by Xanthomonas bacteria, leading to small, dark spots on leaves and fruit.",
+        "Symptoms": "Black or brown water-soaked lesions on leaves and fruit.",
+        "Treatment": "Use copper-based fungicides, remove infected leaves, and avoid overhead watering."
     },
     "Tomato__Target_Spot": {
-        "description": "Fungal disease caused by *Corynespora cassiicola*, common in humid conditions.",
-        "symptoms": "Dark concentric rings ('target-like' spots) on leaves.",
-        "treatment": [
-            "Use fungicides with chlorothalonil or mancozeb.",
-            "Remove affected leaves; improve ventilation."
-        ]
+        "Description": "Fungal disease caused by Corynespora cassiicola, often forming concentric rings on leaves.",
+        "Symptoms": "Yellow halos and circular lesions on lower leaves, spreading upwards.",
+        "Treatment": "Apply chlorothalonil or mancozeb fungicides, prune affected leaves, and improve air circulation."
     },
     "Tomato__Tomato_YellowLeaf__Curl_Virus": {
-        "description": "Viral disease transmitted by whiteflies.",
-        "symptoms": "Upward curling and yellowing of leaves, stunted growth, low yield.",
-        "treatment": [
-            "Remove infected plants immediately.",
-            "Use neem oil or sticky traps to control whiteflies.",
-            "Plant virus-resistant varieties."
-        ]
+        "Description": "Viral infection transmitted by whiteflies, causing leaf curling and stunted growth.",
+        "Symptoms": "Upward leaf curling, yellowing, and reduced fruit yield.",
+        "Treatment": "Control whiteflies, remove infected plants, and use resistant tomato varieties."
     },
     "Tomato__Tomato_mosaic_virus": {
-        "description": "Highly contagious viral infection affecting tomato leaves and fruit.",
-        "symptoms": "Mottled light/dark green leaves, leaf distortion, poor fruit yield.",
-        "treatment": [
-            "Destroy infected plants.",
-            "Sterilize tools with 10% bleach.",
-            "Avoid smoking near plants."
-        ]
+        "Description": "Virus spread through contact or infected tools, leading to mottled, mosaic-like leaf patterns.",
+        "Symptoms": "Mottled, distorted leaves and reduced fruit set.",
+        "Treatment": "Disinfect tools, avoid smoking near plants, and use resistant cultivars."
     }
 }
 
-# Streamlit UI
-st.title("🍅 Tomato Leaf Disease Detector")
-st.write("Upload a tomato leaf image to identify the disease and get treatment suggestions.")
+# 📷 Upload image
+uploaded_file = st.file_uploader("Upload a tomato leaf image...", type=["jpg", "jpeg", "png"])
 
-uploaded_file = st.file_uploader("Upload Leaf Image", type=["jpg", "jpeg", "png"])
-
-if uploaded_file is not None:
+if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
-    st.image(image, caption="Uploaded Leaf", use_container_width=True)
+    st.image(image, caption="Uploaded Image", use_container_width=True)
 
-    # Preprocess
-    img = image.resize((224, 224))
-    img_array = tf.keras.utils.img_to_array(img) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
+    # 🧩 Preprocess
+    img_resized = image.resize((224, 224))
+    img_array = np.expand_dims(np.array(img_resized) / 255.0, axis=0).astype(np.float32)
 
-    # Predict
-    prediction = model.predict(img_array)
-    predicted_class = CLASS_NAMES[np.argmax(prediction)]
-    confidence = np.max(prediction) * 100
+    # 🔍 Predict
+    interpreter.set_tensor(input_details[0]['index'], img_array)
+    interpreter.invoke()
+    preds = interpreter.get_tensor(output_details[0]['index'])[0]
 
-    # Show result
-    st.subheader(f"🌿 Prediction: {predicted_class}")
-    st.write(f"**Confidence:** {confidence:.2f}%")
+    pred_idx = int(np.argmax(preds))
+    confidence = float(np.max(preds)) * 100
+    label = labels[pred_idx]
 
-    # Disease Info
-    info = disease_info[predicted_class]
-    st.write(f"### 🦠 Description")
-    st.write(info['description'])
-    st.write(f"### ⚠️ Symptoms")
-    st.write(info['symptoms'])
-    st.write(f"### 💊 Treatment")
-    for step in info['treatment']:
-        st.write(f"- {step}")
+    # 🧾 Display
+    st.subheader(f"Prediction: {label}")
+    st.write(f"Confidence: **{confidence:.2f}%**")
+
+    info = disease_info.get(label, None)
+    if info:
+        st.markdown("### 🩺 Disease Information")
+        st.write(f"**Description:** {info['Description']}")
+        st.write(f"**Symptoms:** {info['Symptoms']}")
+        st.write(f"**Treatment:** {info['Treatment']}")
+    else:
+        st.warning("No information available for this disease.")
